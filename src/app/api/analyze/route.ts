@@ -103,12 +103,13 @@ export async function POST(request: NextRequest) {
     const bytes = await imageFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString('base64');
+    const mimeType = imageFile.type || 'image/jpeg';
 
-    console.log('Image size:', buffer.length, 'bytes');
+    console.log('Image size:', buffer.length, 'bytes, type:', mimeType);
 
-    // 使用智谱 GLM-4.7 视觉模型
+    // 使用智谱 glm-4v-flash 视觉模型（免费且支持图片）
     const requestBody = {
-      model: 'GLM-4.7',
+      model: 'glm-4v-flash',
       messages: [
         {
           role: 'user',
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
             {
               type: 'image_url',
               image_url: {
-                url: base64Image,
+                url: `data:${mimeType};base64,${base64Image}`,
               },
             },
             {
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
       temperature: 0.7,
     };
 
-    console.log('Calling Zhipu API with model: GLM-4.7');
+    console.log('Calling Zhipu API with model: glm-4v-flash');
     
     const response = await fetch(ZHIPU_API_URL, {
       method: 'POST',
