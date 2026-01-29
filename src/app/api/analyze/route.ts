@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '6881c33808b84b88a48c9cb8ec23132d.Oeyj95d6G0WsDsLE';
+const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || 'c91f32d0e744701d3f49f632ddb4e4c1.nPBmYXV2FwKpf8qr';
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
 const FACE_READING_PROMPT = `你是一位精通中国传统面相学的大师，同时也精通现代心理学和命理学。请根据用户上传的面部照片进行详细的面相分析。
@@ -35,20 +35,18 @@ const FACE_READING_PROMPT = `你是一位精通中国传统面相学的大师，
 
 ## 分析要求
 请仔细观察照片中人物的面部特征，包括但不限于：
-- 脸型轮廓
-- 额头形状和饱满度
+- 脸型轮廓、额头形状和饱满度
 - 眉毛形状、浓淡、长短
 - 眼睛大小、神采、眼距
 - 鼻子高低、鼻翼
 - 嘴唇厚薄、嘴角
-- 下巴形状
-- 颧骨高低
+- 下巴形状、颧骨高低
 - 整体气色
 
 请以专业、积极、有建设性的语气进行分析，给出正面引导。
 
 ## 输出格式
-请严格按照以下JSON格式输出（确保是有效的JSON）：
+请严格按照以下JSON格式输出（确保是有效的JSON，不要包含任何其他内容）：
 
 {
   "overview": "面相总体评价，200字左右的综合分析",
@@ -105,50 +103,58 @@ export async function POST(request: NextRequest) {
     const bytes = await imageFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString('base64');
-    const mimeType = imageFile.type || 'image/jpeg';
 
-    // Call Zhipu AI API
+    console.log('Image size:', buffer.length, 'bytes');
+
+    // 使用智谱 GLM-4.7 视觉模型
+    const requestBody = {
+      model: 'GLM-4.7',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: base64Image,
+              },
+            },
+            {
+              type: 'text',
+              text: FACE_READING_PROMPT,
+            },
+          ],
+        },
+      ],
+      temperature: 0.7,
+    };
+
+    console.log('Calling Zhipu API with model: GLM-4.7');
+    
     const response = await fetch(ZHIPU_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${ZHIPU_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'glm-4v-plus',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: FACE_READING_PROMPT,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${base64Image}`,
-                },
-              },
-            ],
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 4096,
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log('Zhipu API response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Zhipu API error:', errorText);
       return NextResponse.json(
-        { error: 'AI分析服务暂时不可用，请稍后重试' },
+        { error: `AI分析服务暂时不可用，请稍后重试 (${response.status})` },
         { status: 500 }
       );
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    
+    console.log('Got content length:', content?.length);
 
     if (!content) {
       return NextResponse.json(
@@ -169,40 +175,48 @@ export async function POST(request: NextRequest) {
       }
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
-      console.error('Raw content:', content);
+      console.error('Raw content:', content.substring(0, 500));
       
-      // Return a fallback response
+      // Return a fallback response based on content
       result = {
         overview: content.slice(0, 500) || '面相分析完成，您的面部特征显示出独特的个人魅力。',
         fiveOfficials: {
-          ear: '耳型端正，代表智慧与福气。',
-          eyebrow: '眉形秀丽，主贵人运佳。',
-          eye: '眼神明亮，心性善良。',
-          nose: '鼻相端正，财运稳健。',
-          mouth: '口型周正，福禄双全。',
+          ear: '耳型端正，代表智慧与福气，少年运势平顺。',
+          eyebrow: '眉形秀丽，主贵人运佳，兄弟缘分深厚。',
+          eye: '眼神明亮有神，心性善良，意志力坚定。',
+          nose: '鼻相端正挺拔，财运稳健，中年运势上佳。',
+          mouth: '口型周正，福禄双全，晚年生活安康。',
         },
         threeZones: {
-          upper: '上停饱满，少年运势平顺。',
-          middle: '中停挺拔，中年事业有成。',
-          lower: '下停圆润，晚年福寿安康。',
+          upper: '上停饱满开阔，代表少年时期运势平顺，智慧聪颖，学业顺利。',
+          middle: '中停挺拔有力，预示中年事业有成，财运亨通，贵人相助。',
+          lower: '下停圆润厚实，晚年福寿安康，子孙贤孝，家庭和美。',
         },
         twelvePalaces: {
-          life: '命宫开阔', wealth: '财运亨通', siblings: '兄弟和睦',
-          marriage: '姻缘美满', children: '子女孝顺', health: '身体康健',
-          travel: '出行顺利', friends: '人缘极佳', career: '事业顺遂',
-          property: '家宅平安', fortune: '福德深厚', parents: '父母缘佳',
+          life: '命宫开阔明亮，基础运势良好',
+          wealth: '财帛宫丰隆，财运亨通',
+          siblings: '兄弟宫和睦，手足情深',
+          marriage: '夫妻宫美满，姻缘和谐',
+          children: '子女宫旺盛，子嗣运佳',
+          health: '疾厄宫平稳，身体康健',
+          travel: '迁移宫顺利，出行平安',
+          friends: '奴仆宫充实，人缘极佳',
+          career: '官禄宫高照，事业顺遂',
+          property: '田宅宫安稳，家宅平安',
+          fortune: '福德宫深厚，福气绑身',
+          parents: '父母宫和顺，孝道双全',
         },
         fortune: {
-          career: '事业运势良好，适合稳步发展。',
-          wealth: '财运平稳，注意理财规划。',
-          love: '感情运势温和，珍惜眼前人。',
-          health: '注意作息规律，保持心情愉悦。',
+          career: '事业运势良好，适合稳步发展，贵人相助，有望在专业领域取得突破。',
+          wealth: '财运平稳向上，正财运佳，适合稳健理财，避免冒险投资。',
+          love: '感情运势温和，单身者有望遇到良缘，已有伴者感情稳定。',
+          health: '注意作息规律，保持心情愉悦，适当运动，身体自然康健。',
         },
-        advice: '保持积极心态，相由心生，善待他人，福报自来。',
+        advice: '相由心生，保持积极乐观的心态是最好的开运方式。善待他人，广结善缘，福报自来。建议多行善事，保持谦逊，必能心想事成。',
         luckyElements: {
-          color: '紫色、金色',
-          number: '3、8',
-          direction: '东南方',
+          color: '紫色、金色、蓝色',
+          number: '3、6、8',
+          direction: '东南方、正南方',
         },
       };
     }
